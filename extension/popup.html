@@ -40,6 +40,12 @@
     <main class="app-main">
       <!-- 1. DASHBOARD TAB -->
       <section id="dashboard-tab" class="tab-content active">
+        <!-- Action Buttons: Login/Logout & Break -->
+        <div class="control-panel flex-row" style="margin-bottom: 15px; gap: 10px; padding: 0 5px;">
+          <button id="login-logout-btn" class="btn btn-primary flex-fill" style="font-weight: 700; height: 38px;">Login</button>
+          <button id="break-btn" class="btn btn-secondary flex-fill" style="font-weight: 700; height: 38px;" disabled>Break</button>
+        </div>
+
         <!-- Progress Rings Section -->
         <div class="progress-section">
           <!-- Work Time Ring -->
@@ -91,8 +97,8 @@
           </div>
         </div>
 
-        <!-- Inactivity / Idle Counter -->
-        <div class="stats-bar-grid">
+        <!-- Inactivity & Break Cards -->
+        <div class="stats-bar-grid" style="display: flex; flex-direction: column; gap: 10px;">
           <div class="stat-bar-card idle-card">
             <div class="bar-header">
               <span>Total Idle Time</span>
@@ -100,6 +106,15 @@
             </div>
             <div class="progress-bar-bg">
               <div id="idle-bar-fill" class="progress-bar-fill idle-fg" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="stat-bar-card break-card" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.15);">
+            <div class="bar-header">
+              <span>Total Break Time</span>
+              <span id="break-timer" class="small-timer" style="color: #818cf8;">00:00:00</span>
+            </div>
+            <div class="progress-bar-bg" style="background: rgba(255,255,255,0.03);">
+              <div id="break-bar-fill" class="progress-bar-fill" style="width: 0%; background: linear-gradient(90deg, #6366f1, #818cf8);"></div>
             </div>
           </div>
         </div>

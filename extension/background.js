@@ -16,16 +16,20 @@ function getNewDailyState() {
     totalLoginTime: 0,
     totalActiveTime: 0,
     totalIdleTime: 0,
+    totalBreakTime: 0,
     projects: {
       "General": {
         workTime: 0,
         idleTime: 0,
+        breakTime: 0,
         taskCount: 0
       }
     },
     activeProject: "General",
-    isTracking: false,
-    isActive: false,
+    isLoggedIn: false, // Whether the user clicked "Login"
+    isOnBreak: false,  // Whether the user is on break
+    isTracking: false, // Whether the MultiMango tab is open
+    isActive: false,   // Whether the tab is actively focused
     lastUpdated: Date.now()
   };
 }
@@ -77,6 +81,7 @@ async function getOrInitState() {
         totalLoginTime: state.totalLoginTime,
         totalActiveTime: state.totalActiveTime,
         totalIdleTime: state.totalIdleTime,
+        totalBreakTime: state.totalBreakTime || 0,
         projects: state.projects
       });
       // Keep history to last 30 days
@@ -105,12 +110,6 @@ async function syncToDashboard() {
     // Clean trailing slash
     const targetUrl = settings.syncUrl.replace(/\/$/, '');
     
-    // Sum tasks completed today
-    let totalTasks = 0;
-    for (const proj in state.projects) {
-      totalTasks += state.projects[proj].taskCount;
-    }
-    
     const payload = {
       employeeId: settings.employeeId || "N/A",
       employeeName: settings.employeeName || "Employee",
@@ -119,9 +118,14 @@ async function syncToDashboard() {
       loginTime: state.totalLoginTime,
       activeTime: state.totalActiveTime,
       idleTime: state.totalIdleTime,
+      breakTime: state.totalBreakTime || 0,
       projects: state.projects,
-      isOnline: state.isTracking,
-      status: state.isTracking ? (state.isActive ? "Working" : "Idle") : "Offline"
+      isOnline: state.isLoggedIn, // Online on dashboard if logged in
+      status: state.isLoggedIn 
+        ? (state.isOnBreak 
+            ? "Break" 
+            : (state.isTracking && state.isActive ? "Working" : "Idle"))
+        : "Offline"
     };
 
     const controller = new AbortController();
@@ -149,25 +153,32 @@ async function tickTracking(forceInactive = false) {
   const now = Date.now();
   const delta = now - state.lastUpdated;
 
-  // We only increment if tracking is active
-  if (state.isTracking && delta > 0) {
+  // We only increment if logged in manually
+  if (state.isLoggedIn && delta > 0) {
     state.totalLoginTime += delta;
-
-    // Check if user is active
-    const isUserActive = state.isActive && !forceInactive;
 
     // Active project structure safety check
     if (!state.projects[state.activeProject]) {
-      state.projects[state.activeProject] = { workTime: 0, idleTime: 0, taskCount: 0 };
+      state.projects[state.activeProject] = { workTime: 0, idleTime: 0, breakTime: 0, taskCount: 0 };
     }
 
     const proj = state.projects[state.activeProject];
-    if (isUserActive) {
-      state.totalActiveTime += delta;
-      proj.workTime += delta;
+    if (proj.breakTime === undefined) proj.breakTime = 0;
+
+    if (state.isOnBreak) {
+      // User is on break: accumulate breakTime
+      state.totalBreakTime = (state.totalBreakTime || 0) + delta;
+      proj.breakTime += delta;
     } else {
-      state.totalIdleTime += delta;
-      proj.idleTime += delta;
+      // User is active: check active tab focus on MultiMango
+      const isUserActive = state.isActive && !forceInactive;
+      if (isUserActive) {
+        state.totalActiveTime += delta;
+        proj.workTime += delta;
+      } else {
+        state.totalIdleTime += delta;
+        proj.idleTime += delta;
+      }
     }
   }
 
@@ -175,16 +186,18 @@ async function tickTracking(forceInactive = false) {
   await chrome.storage.local.set({ currentState: state });
 }
 
-// Scan browser tabs for any Ethara.ai tab
-function checkEthara.aiTabs() {
+// Scan browser tabs for any MultiMango tab
+function checkTrackingTabs() {
   chrome.tabs.query({ url: "*://*.multimango.com/*" }, async (tabs) => {
     const hasTab = tabs.length > 0;
     const { state } = await getOrInitState();
     
     // Check if tracking status changed
     if (state.isTracking !== hasTab) {
-      // Tick once before switching status to capture final delta
-      await tickTracking();
+      if (state.isLoggedIn) {
+        // Tick once before switching status to capture final delta
+        await tickTracking();
+      }
       
       state.isTracking = hasTab;
       if (!hasTab) {
@@ -200,11 +213,11 @@ function checkEthara.aiTabs() {
 }
 
 // Event Listeners for Tab Changes
-chrome.tabs.onCreated.addListener(checkEthara.aiTabs);
-chrome.tabs.onRemoved.addListener(checkEthara.aiTabs);
+chrome.tabs.onCreated.addListener(checkTrackingTabs);
+chrome.tabs.onRemoved.addListener(checkTrackingTabs);
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url) {
-    checkEthara.aiTabs();
+    checkTrackingTabs();
   }
 });
 
@@ -214,14 +227,16 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
     // Browser lost focus completely
     setTabInactive();
   } else {
-    checkEthara.aiTabs();
+    checkTrackingTabs();
   }
 });
 
 async function setTabInactive() {
   const { state } = await getOrInitState();
   if (state.isActive) {
-    await tickTracking(true); // tick as inactive
+    if (state.isLoggedIn) {
+      await tickTracking(true); // tick as inactive
+    }
     state.isActive = false;
     state.lastUpdated = Date.now();
     await chrome.storage.local.set({ currentState: state });
@@ -239,16 +254,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.type === "TASK_COMPLETED") {
     handleTaskCompleted();
     sendResponse({ success: true });
+  } else if (message.type === "LOGIN_STATE_CHANGED") {
+    handleLoginStateChanged(message.isLoggedIn, message.isOnBreak).then(() => {
+      sendResponse({ success: true });
+    });
   }
   return true;
 });
+
+// Handle login state changes from the popup UI
+async function handleLoginStateChanged(isLoggedIn, isOnBreak) {
+  const { state } = await getOrInitState();
+  
+  if (state.isLoggedIn) {
+    await tickTracking();
+  }
+  
+  state.isLoggedIn = isLoggedIn;
+  state.isOnBreak = isOnBreak;
+  state.lastUpdated = Date.now();
+  
+  await chrome.storage.local.set({ currentState: state });
+  await syncToDashboard();
+}
 
 // Handle incoming heartbeat from content script
 async function handleHeartbeat(isContentActive, projectSuggestion) {
   const { state } = await getOrInitState();
   
-  // Tick using the *previous* state's activity status
-  await tickTracking();
+  if (state.isLoggedIn) {
+    await tickTracking();
+  }
 
   // Update active state based on heartbeat
   state.isActive = isContentActive;
@@ -258,7 +294,7 @@ async function handleHeartbeat(isContentActive, projectSuggestion) {
   // If content script detected a project from the URL/Page structure, suggest it
   if (projectSuggestion && projectSuggestion !== state.activeProject) {
     if (!state.projects[projectSuggestion]) {
-      state.projects[projectSuggestion] = { workTime: 0, idleTime: 0, taskCount: 0 };
+      state.projects[projectSuggestion] = { workTime: 0, idleTime: 0, breakTime: 0, taskCount: 0 };
     }
     if (state.activeProject === "General") {
       state.activeProject = projectSuggestion;
@@ -272,7 +308,7 @@ async function handleHeartbeat(isContentActive, projectSuggestion) {
 async function handleTaskCompleted() {
   const { state } = await getOrInitState();
   if (!state.projects[state.activeProject]) {
-    state.projects[state.activeProject] = { workTime: 0, idleTime: 0, taskCount: 0 };
+    state.projects[state.activeProject] = { workTime: 0, idleTime: 0, breakTime: 0, taskCount: 0 };
   }
   state.projects[state.activeProject].taskCount += 1;
   await chrome.storage.local.set({ currentState: state });
@@ -289,7 +325,7 @@ chrome.alarms.create("tickTrackerAlarm", { periodInMinutes: 0.15 }); // ~10 seco
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "tickTrackerAlarm") {
     const { state } = await getOrInitState();
-    if (state.isTracking) {
+    if (state.isLoggedIn) {
       await tickTracking();
     }
     // Sync to dashboard every 10 seconds (irrespective of tracking state, to keep "Offline" status fresh)
@@ -300,9 +336,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // Run check on startup
 chrome.runtime.onInstalled.addListener(() => {
   getOrInitState();
-  checkEthara.aiTabs();
+  checkTrackingTabs();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  checkEthara.aiTabs();
+  checkTrackingTabs();
 });

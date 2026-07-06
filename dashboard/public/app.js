@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   setupSapImport();
   loadGoogleSheetSettings();
+  fetchEmployeeRegistry();
   
   // Initial load
   selectedDate = getTodayString();
@@ -61,7 +62,13 @@ const elements = {
   // Google Sheets integration elements
   googleSheetWebhookInput: document.getElementById('google-sheet-webhook-input'),
   saveSheetWebhookBtn: document.getElementById('save-sheet-webhook-btn'),
-  webhookToast: document.getElementById('webhook-toast')
+  webhookToast: document.getElementById('webhook-toast'),
+
+  // Employee Registry elements
+  regEmpId: document.getElementById('reg-emp-id'),
+  regEmpName: document.getElementById('reg-emp-name'),
+  registerEmpBtn: document.getElementById('register-emp-btn'),
+  registryTableBody: document.getElementById('registry-table-body')
 };
 
 // Setup Sidebar navigation
@@ -114,6 +121,11 @@ function setupEventListeners() {
 
   // Save Google Sheet Webhook
   elements.saveSheetWebhookBtn.addEventListener('click', saveGoogleSheetSettings);
+
+  // Register Employee Click Listener
+  if (elements.registerEmpBtn) {
+    elements.registerEmpBtn.addEventListener('click', registerEmployee);
+  }
 }
 
 // Live Update Triggers
@@ -294,6 +306,7 @@ function createEmployeeRow(emp) {
     <td>${formatTime(emp.loginTime)}</td>
     <td>${formatTime(emp.activeTime)}</td>
     <td>${formatTime(emp.idleTime)}</td>
+    <td>${formatTime(emp.breakTime || 0)}</td>
     <td><strong>${tasks}</strong></td>
     <td>${compTag}</td>
   `;
@@ -374,7 +387,7 @@ async function exportTodayCSV() {
       return;
     }
 
-    let csv = "Date,Employee Name,Employee ID,Active Project,Work Hours,Idle Hours,Login Hours,Tasks Completed,Work Target Met,Login Target Met\r\n";
+    let csv = "Date,Employee Name,Employee ID,Active Project,Work Hours,Idle Hours,Break Hours,Login Hours,Tasks Completed,Work Target Met,Login Target Met\r\n";
     
     list.forEach(emp => {
       let tasks = 0;
@@ -384,7 +397,7 @@ async function exportTodayCSV() {
       const workMet = emp.activeTime >= WORK_TARGET_MS ? "YES" : "NO";
       const loginMet = emp.loginTime >= LOGIN_TARGET_MS ? "YES" : "NO";
       
-      csv += `${selectedDate},"${emp.employeeName}",${emp.employeeId},"${emp.activeProject}",${formatHours(emp.activeTime)},${formatHours(emp.idleTime)},${formatHours(emp.loginTime)},${tasks},${workMet},${loginMet}\r\n`;
+      csv += `${selectedDate},"${emp.employeeName}",${emp.employeeId},"${emp.activeProject}",${formatHours(emp.activeTime)},${formatHours(emp.idleTime)},${formatHours(emp.breakTime || 0)},${formatHours(emp.loginTime)},${tasks},${workMet},${loginMet}\r\n`;
     });
 
     downloadCSV(csv, `ethara_team_report_${selectedDate}.csv`);
@@ -405,7 +418,7 @@ async function exportFullHistoryCSV() {
       return;
     }
 
-    let csv = "Date,Employee Name,Employee ID,Active Project,Work Hours,Idle Hours,Login Hours,Tasks Completed,Work Target Met,Login Target Met\r\n";
+    let csv = "Date,Employee Name,Employee ID,Active Project,Work Hours,Idle Hours,Break Hours,Login Hours,Tasks Completed,Work Target Met,Login Target Met\r\n";
     
     dates.forEach(date => {
       const list = Object.values(history[date]);
@@ -417,7 +430,7 @@ async function exportFullHistoryCSV() {
         const workMet = emp.activeTime >= WORK_TARGET_MS ? "YES" : "NO";
         const loginMet = emp.loginTime >= LOGIN_TARGET_MS ? "YES" : "NO";
         
-        csv += `${date},"${emp.employeeName}",${emp.employeeId},"${emp.activeProject}",${formatHours(emp.activeTime)},${formatHours(emp.idleTime)},${formatHours(emp.loginTime)},${tasks},${workMet},${loginMet}\r\n`;
+        csv += `${date},"${emp.employeeName}",${emp.employeeId},"${emp.activeProject}",${formatHours(emp.activeTime)},${formatHours(emp.idleTime)},${formatHours(emp.breakTime || 0)},${formatHours(emp.loginTime)},${tasks},${workMet},${loginMet}\r\n`;
       });
     });
 
@@ -730,6 +743,63 @@ async function saveGoogleSheetSettings() {
     }
   } catch (err) {
     alert("Failed to save webhook link: " + err.message);
+  }
+}
+
+// Fetch and display employee registry
+async function fetchEmployeeRegistry() {
+  if (!elements.registryTableBody) return;
+  try {
+    const res = await fetch('/api/employees/registry');
+    if (!res.ok) throw new Error("Failed to load registry");
+    const employees = await res.json();
+    
+    elements.registryTableBody.innerHTML = '';
+    if (employees.length === 0) {
+      elements.registryTableBody.innerHTML = '<tr><td colspan="2" style="text-align: center; color: var(--text-dimmed);">No registered employees.</td></tr>';
+      return;
+    }
+
+    employees.forEach(emp => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${emp.id}</strong></td>
+        <td>${emp.name}</td>
+      `;
+      elements.registryTableBody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error("Failed to fetch employee registry:", err.message);
+  }
+}
+
+// Register or update an employee
+async function registerEmployee() {
+  const id = elements.regEmpId.value.trim();
+  const name = elements.regEmpName.value.trim();
+
+  if (!id || !name) {
+    alert("Please enter both Employee ID and Name!");
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/employees/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name })
+    });
+    
+    if (res.ok) {
+      elements.regEmpId.value = '';
+      elements.regEmpName.value = '';
+      fetchEmployeeRegistry();
+    } else {
+      const data = await res.json();
+      throw new Error(data.error || "Failed to register employee");
+    }
+  } catch (err) {
+    alert("Failed to register employee: " + err.message);
   }
 }
 

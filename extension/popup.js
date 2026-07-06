@@ -28,6 +28,13 @@ const elements = {
   
   idleTimer: document.getElementById('idle-timer'),
   idleBarFill: document.getElementById('idle-bar-fill'),
+
+  breakTimer: document.getElementById('break-timer'),
+  breakBarFill: document.getElementById('break-bar-fill'),
+
+  // Control panel buttons
+  loginLogoutBtn: document.getElementById('login-logout-btn'),
+  breakBtn: document.getElementById('break-btn'),
   
   // Actions Panel
   currentProjectDisplay: document.getElementById('current-project-display'),
@@ -115,6 +122,97 @@ async function loadData() {
 
 // Setup Interaction Event Listeners
 function setupEventListeners() {
+  // Login / Logout Action
+  elements.loginLogoutBtn.addEventListener('click', async () => {
+    if (!currentCachedState) return;
+
+    if (!currentCachedState.isLoggedIn) {
+      // Trying to log in. Validate settings first!
+      if (!currentCachedSettings || !currentCachedSettings.employeeId || !currentCachedSettings.syncUrl) {
+        alert("Please set and save your Employee ID and Dashboard Sync URL in Settings tab first!");
+        // Switch to settings tab
+        elements.navBtns.forEach(b => b.classList.remove('active'));
+        elements.tabs.forEach(t => t.classList.remove('active'));
+        const settingsBtn = Array.from(elements.navBtns).find(b => b.getAttribute('data-tab') === 'settings-tab');
+        if (settingsBtn) settingsBtn.classList.add('active');
+        document.getElementById('settings-tab').classList.add('active');
+        populateSettingsForm();
+        return;
+      }
+
+      // Verify Employee ID against the registry database
+      elements.loginLogoutBtn.textContent = "Verifying...";
+      elements.loginLogoutBtn.disabled = true;
+
+      try {
+        const syncUrl = currentCachedSettings.syncUrl.replace(/\/$/, '');
+        const verifyRes = await fetch(`${syncUrl}/api/employees/verify?id=${currentCachedSettings.employeeId}`);
+        if (!verifyRes.ok) throw new Error("Could not reach verification server.");
+        const verifyData = await verifyRes.json();
+
+        if (!verifyData.exists) {
+          alert("Invalid Employee ID! Make sure you are registered in the Admin Dashboard database.");
+          elements.loginLogoutBtn.textContent = "Login";
+          elements.loginLogoutBtn.disabled = false;
+          return;
+        }
+
+        // Successfully verified
+        currentCachedState.isLoggedIn = true;
+        currentCachedState.isOnBreak = false;
+        currentCachedState.lastUpdated = Date.now();
+        await chrome.storage.local.set({ currentState: currentCachedState });
+
+        // Sync with background
+        await chrome.runtime.sendMessage({
+          type: "LOGIN_STATE_CHANGED",
+          isLoggedIn: true,
+          isOnBreak: false
+        });
+
+        loadData();
+      } catch (err) {
+        alert("Login failed: " + err.message);
+        elements.loginLogoutBtn.textContent = "Login";
+        elements.loginLogoutBtn.disabled = false;
+      }
+    } else {
+      // Logging out
+      currentCachedState.isLoggedIn = false;
+      currentCachedState.isOnBreak = false;
+      currentCachedState.lastUpdated = Date.now();
+      await chrome.storage.local.set({ currentState: currentCachedState });
+
+      // Sync with background
+      await chrome.runtime.sendMessage({
+        type: "LOGIN_STATE_CHANGED",
+        isLoggedIn: false,
+        isOnBreak: false
+      });
+
+      loadData();
+    }
+  });
+
+  // Break / Resume Action
+  elements.breakBtn.addEventListener('click', async () => {
+    if (!currentCachedState || !currentCachedState.isLoggedIn) return;
+
+    const currentBreakState = !currentCachedState.isOnBreak;
+    currentCachedState.isOnBreak = currentBreakState;
+    currentCachedState.lastUpdated = Date.now();
+    await chrome.storage.local.set({ currentState: currentCachedState });
+
+    // Sync with background
+    await chrome.runtime.sendMessage({
+      type: "LOGIN_STATE_CHANGED",
+      isLoggedIn: true,
+      isOnBreak: currentBreakState
+    });
+
+    loadData();
+  });
+
   // Manual Task Adder
   elements.addTaskBtn.addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: "TASK_COMPLETED" }, (response) => {
@@ -140,7 +238,7 @@ function setupEventListeners() {
     
     if (currentCachedState) {
       if (!currentCachedState.projects[name]) {
-        currentCachedState.projects[name] = { workTime: 0, idleTime: 0, taskCount: 0 };
+        currentCachedState.projects[name] = { workTime: 0, idleTime: 0, breakTime: 0, taskCount: 0 };
         currentCachedState.activeProject = name;
         await chrome.storage.local.set({ currentState: currentCachedState });
         
@@ -153,30 +251,66 @@ function setupEventListeners() {
     }
   });
 
-  // Settings Save
+  // Settings Save with validation
   elements.settingsForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const newSettings = {
-      employeeName: elements.employeeNameInput.value.trim(),
-      employeeId: elements.employeeIdInput.value.trim(),
-      syncUrl: elements.syncUrlInput.value.trim(),
-      targetWorkHours: parseFloat(elements.workTargetInput.value) || 6,
-      targetLoginHours: parseFloat(elements.loginTargetInput.value) || 8,
-      idleThresholdSeconds: parseInt(elements.idleThresholdInput.value) || 60
-    };
+    const syncUrl = elements.syncUrlInput.value.trim();
+    const employeeId = elements.employeeIdInput.value.trim();
 
-    currentCachedSettings = newSettings;
-    await chrome.storage.local.set({ settings: newSettings });
+    if (!syncUrl || !employeeId) {
+      alert("Please provide both Sync URL and Employee ID!");
+      return;
+    }
 
-    elements.targetWorkVal.textContent = `${newSettings.targetWorkHours}h`;
-    elements.targetLoginVal.textContent = `${newSettings.targetLoginHours}h`;
+    const saveBtn = elements.settingsForm.querySelector('button[type="submit"]');
+    saveBtn.textContent = "Verifying...";
+    saveBtn.disabled = true;
 
-    // Show success toast
-    elements.settingsSuccessToast.classList.add('show');
-    setTimeout(() => {
-      elements.settingsSuccessToast.classList.remove('show');
-    }, 2000);
+    try {
+      const verifyRes = await fetch(`${syncUrl.replace(/\/$/, '')}/api/employees/verify?id=${employeeId}`);
+      if (!verifyRes.ok) throw new Error("Could not reach verification server.");
+      const verifyData = await verifyRes.json();
+
+      if (!verifyData.exists) {
+        alert("Invalid Employee ID! Make sure you are registered in the Admin Dashboard database.");
+        saveBtn.textContent = "Save Settings";
+        saveBtn.disabled = false;
+        return;
+      }
+
+      // Auto-populate employee name from registry
+      const employeeName = verifyData.name || elements.employeeNameInput.value.trim() || "Employee";
+      elements.employeeNameInput.value = employeeName;
+
+      const newSettings = {
+        employeeName,
+        employeeId,
+        syncUrl,
+        targetWorkHours: parseFloat(elements.workTargetInput.value) || 6,
+        targetLoginHours: parseFloat(elements.loginTargetInput.value) || 8,
+        idleThresholdSeconds: parseInt(elements.idleThresholdInput.value) || 60
+      };
+
+      currentCachedSettings = newSettings;
+      await chrome.storage.local.set({ settings: newSettings });
+
+      elements.targetWorkVal.textContent = `${newSettings.targetWorkHours}h`;
+      elements.targetLoginVal.textContent = `${newSettings.targetLoginHours}h`;
+
+      // Show success toast
+      elements.settingsSuccessToast.classList.add('show');
+      setTimeout(() => {
+        elements.settingsSuccessToast.classList.remove('show');
+      }, 2000);
+
+      loadData();
+    } catch (err) {
+      alert("Verification failed: " + err.message);
+    } finally {
+      saveBtn.textContent = "Save Settings";
+      saveBtn.disabled = false;
+    }
   });
 
   // CSV Exports
@@ -204,7 +338,7 @@ function formatTime(ms) {
 
 // UI Ticker running every second to display smooth countdown/progress
 function updateUiTick() {
-  if (!currentCachedState || !currentCachedState.isTracking) return;
+  if (!currentCachedState || !currentCachedState.isLoggedIn) return;
 
   const now = Date.now();
   const elapsed = now - currentCachedState.lastUpdated;
@@ -216,15 +350,22 @@ function updateUiTick() {
   
   const activeProj = stateCopy.activeProject;
   if (!stateCopy.projects[activeProj]) {
-    stateCopy.projects[activeProj] = { workTime: 0, idleTime: 0, taskCount: 0 };
+    stateCopy.projects[activeProj] = { workTime: 0, idleTime: 0, breakTime: 0, taskCount: 0 };
   }
   
-  if (stateCopy.isActive) {
-    stateCopy.totalActiveTime += elapsed;
-    stateCopy.projects[activeProj].workTime += elapsed;
+  if (stateCopy.isOnBreak) {
+    stateCopy.totalBreakTime = (stateCopy.totalBreakTime || 0) + elapsed;
+    if (!stateCopy.projects[activeProj].breakTime) stateCopy.projects[activeProj].breakTime = 0;
+    stateCopy.projects[activeProj].breakTime += elapsed;
   } else {
-    stateCopy.totalIdleTime += elapsed;
-    stateCopy.projects[activeProj].idleTime += elapsed;
+    const isUserActive = stateCopy.isActive;
+    if (isUserActive) {
+      stateCopy.totalActiveTime += elapsed;
+      stateCopy.projects[activeProj].workTime += elapsed;
+    } else {
+      stateCopy.totalIdleTime += elapsed;
+      stateCopy.projects[activeProj].idleTime += elapsed;
+    }
   }
 
   renderTimers(stateCopy);
@@ -234,8 +375,24 @@ function updateUiTick() {
 function updateDashboardUi() {
   if (!currentCachedState) return;
 
-  if (currentCachedState.isTracking) {
-    if (currentCachedState.isActive) {
+  // Toggle button text
+  if (elements.loginLogoutBtn) {
+    elements.loginLogoutBtn.disabled = false;
+    elements.loginLogoutBtn.textContent = currentCachedState.isLoggedIn ? "Logout" : "Login";
+    elements.loginLogoutBtn.className = currentCachedState.isLoggedIn ? "btn btn-secondary flex-fill" : "btn btn-primary flex-fill";
+  }
+
+  if (elements.breakBtn) {
+    elements.breakBtn.disabled = !currentCachedState.isLoggedIn;
+    elements.breakBtn.textContent = currentCachedState.isOnBreak ? "Resume" : "Break";
+    elements.breakBtn.className = currentCachedState.isOnBreak ? "btn btn-primary flex-fill" : "btn btn-secondary flex-fill";
+  }
+
+  if (currentCachedState.isLoggedIn) {
+    if (currentCachedState.isOnBreak) {
+      elements.statusPulse.className = "status-pulse idle";
+      elements.statusText.textContent = "On Break";
+    } else if (currentCachedState.isTracking && currentCachedState.isActive) {
       elements.statusPulse.className = "status-pulse active";
       elements.statusText.textContent = "Working";
     } else {
@@ -244,7 +401,7 @@ function updateDashboardUi() {
     }
   } else {
     elements.statusPulse.className = "status-pulse offline";
-    elements.statusText.textContent = "Inactive";
+    elements.statusText.textContent = "Offline";
   }
 
   elements.currentProjectDisplay.textContent = currentCachedState.activeProject;
@@ -263,6 +420,10 @@ function renderTimers(state) {
   elements.workTimer.textContent = formatTime(state.totalActiveTime);
   elements.loginTimer.textContent = formatTime(state.totalLoginTime);
   elements.idleTimer.textContent = formatTime(state.totalIdleTime);
+  
+  if (elements.breakTimer) {
+    elements.breakTimer.textContent = formatTime(state.totalBreakTime || 0);
+  }
 
   const workTargetMs = (currentCachedSettings ? currentCachedSettings.targetWorkHours : 6) * 3600000;
   const loginTargetMs = (currentCachedSettings ? currentCachedSettings.targetLoginHours : 8) * 3600000;
@@ -281,6 +442,13 @@ function renderTimers(state) {
     ? Math.min(Math.round((state.totalIdleTime / state.totalLoginTime) * 100), 100) 
     : 0;
   elements.idleBarFill.style.width = `${idlePct}%`;
+
+  const breakPct = state.totalLoginTime > 0
+    ? Math.min(Math.round(((state.totalBreakTime || 0) / state.totalLoginTime) * 100), 100)
+    : 0;
+  if (elements.breakBarFill) {
+    elements.breakBarFill.style.width = `${breakPct}%`;
+  }
 }
 
 // Populate Project selector dropdown
@@ -315,7 +483,7 @@ function renderProjectsTab() {
     
     const tdName = document.createElement('td');
     tdName.innerHTML = name === currentCachedState.activeProject 
-      ? `<strong>${name} 🥭</strong>` 
+      ? `<strong>${name}</strong>` 
       : name;
       
     const tdWork = document.createElement('td');
@@ -378,7 +546,7 @@ async function renderReportsTab() {
 
     statsDiv.innerHTML = `
       <span class="small-timer" style="color: #60a5fa">Work: ${formatTime(day.totalActiveTime)}</span>
-      <div class="history-item-details">Login: ${formatTime(day.totalLoginTime)} • Tasks: ${dayTasks}</div>
+      <div class="history-item-details">Login: ${formatTime(day.totalLoginTime)} • Break: ${formatTime(day.totalBreakTime || 0)} • Tasks: ${dayTasks}</div>
     `;
     
     item.appendChild(dateDiv);
@@ -401,7 +569,7 @@ async function exportCSVReport(todayOnly = true) {
   const empId = settings.employeeId || "N/A";
   
   let csvContent = "data:text/csv;charset=utf-8,";
-  csvContent += "Date,Employee Name,Employee ID,Project Name,Active Work Duration (HH:MM:SS),Idle Duration (HH:MM:SS),Login/Session Duration (HH:MM:SS),Tasks Completed,Work Target Met,Login Target Met\r\n";
+  csvContent += "Date,Employee Name,Employee ID,Project Name,Active Work Duration (HH:MM:SS),Idle Duration (HH:MM:SS),Break Duration (HH:MM:SS),Login/Session Duration (HH:MM:SS),Tasks Completed,Work Target Met,Login Target Met\r\n";
   
   const targetWorkMs = (settings.targetWorkHours || 6) * 3600000;
   const targetLoginMs = (settings.targetLoginHours || 8) * 3600000;
@@ -412,6 +580,7 @@ async function exportCSVReport(todayOnly = true) {
       date: data.currentDate,
       totalActiveTime: data.currentState.totalActiveTime,
       totalIdleTime: data.currentState.totalIdleTime,
+      totalBreakTime: data.currentState.totalBreakTime || 0,
       totalLoginTime: data.currentState.totalLoginTime,
       projects: data.currentState.projects
     });
@@ -431,11 +600,11 @@ async function exportCSVReport(todayOnly = true) {
     const isWorkMet = record.totalActiveTime >= targetWorkMs ? "YES" : "NO";
     const isLoginMet = record.totalLoginTime >= targetLoginMs ? "YES" : "NO";
 
-    csvContent += `${record.date},${name},${empId},[GLOBAL SUMMARY],${formatTime(record.totalActiveTime)},${formatTime(record.totalIdleTime)},${formatTime(record.totalLoginTime)},${sumTasks(record.projects)},${isWorkMet},${isLoginMet}\r\n`;
+    csvContent += `${record.date},${name},${empId},[GLOBAL SUMMARY],${formatTime(record.totalActiveTime)},${formatTime(record.totalIdleTime)},${formatTime(record.totalBreakTime || 0)},${formatTime(record.totalLoginTime)},${sumTasks(record.projects)},${isWorkMet},${isLoginMet}\r\n`;
 
     for (const projName in record.projects) {
       const proj = record.projects[projName];
-      csvContent += `${record.date},${name},${empId},${projName},${formatTime(proj.workTime)},${formatTime(proj.idleTime)},-,${proj.taskCount},-,- \r\n`;
+      csvContent += `${record.date},${name},${empId},${projName},${formatTime(proj.workTime)},${formatTime(proj.idleTime)},${formatTime(proj.breakTime || 0)},-,${proj.taskCount},-,- \r\n`;
     }
   });
 

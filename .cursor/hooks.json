@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "node script/guardrail-hook.js"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "node script/guardrail-hook.js"
+      }
+    ]
+  }
+}

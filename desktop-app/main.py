@@ -34,11 +34,11 @@ def get_active_window_title():
     except Exception:
         return ""
 
-class Ethara.aiTrackerApp:
+class EtharaTrackerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Ethara.ai Desktop Tracker")
-        self.root.geometry("450x640")
+        self.root.geometry("450x700")
         self.root.resizable(False, False)
         
         # Load configuration
@@ -48,16 +48,20 @@ class Ethara.aiTrackerApp:
         self.total_login_time = 0.0  # seconds
         self.total_active_time = 0.0 # seconds
         self.total_idle_time = 0.0   # seconds
+        self.total_break_time = 0.0  # seconds
         self.last_input_time = time.time()
         self.projects = {
             self.config["activeProject"]: {
                 "workTime": 0.0,
                 "idleTime": 0.0,
+                "breakTime": 0.0,
                 "taskCount": 0
             }
         }
         
         # Flags
+        self.is_logged_in = False
+        self.is_on_break = False
         self.is_tracking = False
         self.is_user_active = False
         self.is_running = True
@@ -101,7 +105,7 @@ class Ethara.aiTrackerApp:
             print("Failed to save config:", e)
 
     def setup_styles(self):
-        # Slate theme styling
+        # Black Theme
         self.bg_dark = "#000000"
         self.bg_card = "#0c0c0c"
         self.fg_main = "#f3f4f6"
@@ -110,7 +114,8 @@ class Ethara.aiTrackerApp:
         self.color_work = "#00f2fe"
         self.color_login = "#ff0844"
         self.color_idle = "#f59e0b"
-        self.color_accent = "#6366f1"
+        self.color_break = "#6366f1"
+        self.color_accent = "#10b981"
         
         self.root.configure(bg=self.bg_dark)
         
@@ -121,84 +126,82 @@ class Ethara.aiTrackerApp:
     def create_widgets(self):
         # Header
         header_frame = tk.Frame(self.root, bg=self.bg_dark, pady=15)
-        header_frame.pack(fill="x", px=20)
+        header_frame.pack(fill="x", padx=20)
         
-        
-        
-        title_lbl = tk.Label(header_frame, text="Ethara.ai Tracker", font=("Outfit", 16, "bold"), fg=self.color_idle, bg=self.bg_dark)
+        title_lbl = tk.Label(header_frame, text="Ethara.ai Tracker", font=("Outfit", 18, "bold"), fg=self.color_work, bg=self.bg_dark)
         title_lbl.pack(side="left")
         
         self.status_lbl = tk.Label(header_frame, text="Offline", font=("Outfit", 10, "bold"), fg=self.fg_muted, bg="#181818", px=8, py=2)
         self.status_lbl.pack(side="right")
 
         # Config Panel (Accordion / Collapsible-like Frame)
-        config_frame = tk.LabelFrame(self.root, text=" Employee Profile & Settings ", bg=self.bg_dark, fg=self.color_accent, font=("Outfit", 10, "bold"), bd=1, relief="solid")
-        config_frame.pack(fill="x", padx=20, pady=10)
+        config_frame = tk.LabelFrame(self.root, text=" Employee Profile & Settings ", bg=self.bg_dark, fg=self.color_break, font=("Outfit", 10, "bold"), bd=1, relief="solid")
+        config_frame.pack(fill="x", padx=20, pady=5)
         
-        tk.Label(config_frame, text="Employee Name:", bg=self.bg_dark, fg=self.fg_muted).grid(row=0, column=0, sticky="w", padx=10, pady=4)
-        self.name_ent = tk.Entry(config_frame, bg=self.bg_card, fg=self.fg_main, insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#222222")
-        self.name_ent.insert(0, self.config["employeeName"])
-        self.name_ent.grid(row=0, column=1, sticky="ew", padx=10, pady=4)
-
-        tk.Label(config_frame, text="Employee ID:", bg=self.bg_dark, fg=self.fg_muted).grid(row=1, column=0, sticky="w", padx=10, pady=4)
+        tk.Label(config_frame, text="Employee ID:", bg=self.bg_dark, fg=self.fg_muted).grid(row=0, column=0, sticky="w", padx=10, pady=4)
         self.id_ent = tk.Entry(config_frame, bg=self.bg_card, fg=self.fg_main, insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#222222")
+        self.id_ent.grid(row=0, column=1, sticky="ew", padx=10, pady=4)
         self.id_ent.insert(0, self.config["employeeId"])
-        self.id_ent.grid(row=1, column=1, sticky="ew", padx=10, pady=4)
+        
+        tk.Label(config_frame, text="Employee Name:", bg=self.bg_dark, fg=self.fg_muted).grid(row=1, column=0, sticky="w", padx=10, pady=4)
+        self.name_ent = tk.Entry(config_frame, bg=self.bg_card, fg=self.fg_main, insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#222222", state="readonly")
+        self.name_ent.grid(row=1, column=1, sticky="ew", padx=10, pady=4)
+        # We will populate it upon ID verification
+        self.update_name_field(self.config["employeeName"])
 
         tk.Label(config_frame, text="Sync Server URL:", bg=self.bg_dark, fg=self.fg_muted).grid(row=2, column=0, sticky="w", padx=10, pady=4)
         self.url_ent = tk.Entry(config_frame, bg=self.bg_card, fg=self.fg_main, insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#222222")
-        self.url_ent.insert(0, self.config["syncUrl"])
         self.url_ent.grid(row=2, column=1, sticky="ew", padx=10, pady=4)
+        self.url_ent.insert(0, self.config["syncUrl"])
 
-        save_btn = tk.Button(config_frame, text="Save Settings", command=self.save_settings, bg=self.color_accent, fg="white", font=("Outfit", 9, "bold"), bd=0, activebackground="#4f46e5", activeforeground="white", cursor="hand2")
+        save_btn = tk.Button(config_frame, text="Verify & Save Profile", command=self.save_settings, bg=self.color_break, fg="white", font=("Outfit", 9, "bold"), bd=0, cursor="hand2", activebackground="#4f46e5")
         save_btn.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=8)
-        
+
         config_frame.columnconfigure(1, weight=1)
 
-        # Timers Card
-        timers_frame = tk.Frame(self.root, bg=self.bg_card, bd=1, relief="solid")
-        timers_frame.pack(fill="x", padx=20, pady=10)
-        
-        # Row 1: Work Time
-        work_lbl = tk.Label(timers_frame, text="ACTIVE WORK TIME", font=("Outfit", 9, "bold"), fg=self.fg_muted, bg=self.bg_card)
-        work_lbl.grid(row=0, column=0, sticky="w", padx=15, pady=(12, 2))
-        self.work_time_val = tk.Label(timers_frame, text="00:00:00", font=("Outfit", 20, "bold"), fg=self.color_work, bg=self.bg_card)
-        self.work_time_val.grid(row=1, column=0, sticky="w", padx=15, pady=(0, 10))
+        # Control Panel (Login/Logout & Break Buttons)
+        control_frame = tk.Frame(self.root, bg=self.bg_dark, pady=10)
+        control_frame.pack(fill="x", padx=20)
 
-        # Row 1 Column 2: Login Time
-        login_lbl = tk.Label(timers_frame, text="LOGIN SESSION TIME", font=("Outfit", 9, "bold"), fg=self.fg_muted, bg=self.bg_card)
-        login_lbl.grid(row=0, column=1, sticky="w", padx=15, pady=(12, 2))
-        self.login_time_val = tk.Label(timers_frame, text="00:00:00", font=("Outfit", 20, "bold"), fg=self.color_login, bg=self.bg_card)
-        self.login_time_val.grid(row=1, column=1, sticky="w", padx=15, pady=(0, 10))
+        self.login_btn = tk.Button(control_frame, text="Login", command=self.toggle_login, bg="#1d4ed8", fg="white", font=("Outfit", 11, "bold"), bd=0, cursor="hand2", activebackground="#1e40af")
+        self.login_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
-        # Row 2: Idle Time
-        idle_lbl = tk.Label(timers_frame, text="TOTAL IDLE TIME", font=("Outfit", 9, "bold"), fg=self.fg_muted, bg=self.bg_card)
-        idle_lbl.grid(row=2, column=0, sticky="w", padx=15, pady=(5, 2))
-        self.idle_time_val = tk.Label(timers_frame, text="00:00:00", font=("Outfit", 14, "bold"), fg=self.color_idle, bg=self.bg_card)
-        self.idle_time_val.grid(row=3, column=0, sticky="w", padx=15, pady=(0, 12))
+        self.break_btn = tk.Button(control_frame, text="Break", command=self.toggle_break, bg="#374151", fg="white", font=("Outfit", 11, "bold"), bd=0, cursor="hand2", activebackground="#4b5563", state="disabled")
+        self.break_btn.pack(side="right", fill="x", expand=True, padx=(5, 0))
 
-        timers_frame.columnconfigure(0, weight=1)
-        timers_frame.columnconfigure(1, weight=1)
+        # Metrics Panel
+        metrics_frame = tk.Frame(self.root, bg=self.bg_dark)
+        metrics_frame.pack(fill="x", padx=20, pady=5)
 
-        # Projects & Tasks Area
-        action_frame = tk.Frame(self.root, bg=self.bg_card, bd=1, relief="solid")
+        # 4 Metrics: Work, Login, Idle, Break
+        self.work_time_val = self.create_metric_card(metrics_frame, "Active Work Time", "00:00:00", self.color_work, 0, 0)
+        self.login_time_val = self.create_metric_card(metrics_frame, "Login/Session Time", "00:00:00", self.color_login, 0, 1)
+        self.idle_time_val = self.create_metric_card(metrics_frame, "Total Idle Duration", "00:00:00", self.color_idle, 1, 0)
+        self.break_time_val = self.create_metric_card(metrics_frame, "Total Break Time", "00:00:00", self.color_break, 1, 1)
+
+        metrics_frame.columnconfigure(0, weight=1)
+        metrics_frame.columnconfigure(1, weight=1)
+
+        # Project Selector & Task Logger Frame
+        action_frame = tk.Frame(self.root, bg=self.bg_card, bd=1, relief="solid", highlightthickness=0)
         action_frame.pack(fill="x", padx=20, pady=10)
-        
-        tk.Label(action_frame, text="Active Project:", font=("Outfit", 10, "bold"), fg=self.fg_muted, bg=self.bg_card).grid(row=0, column=0, sticky="w", padx=15, pady=(12, 4))
-        self.project_ent = tk.Entry(action_frame, bg=self.bg_dark, fg=self.fg_main, insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#222222")
+
+        # Active Project label & selector
+        tk.Label(action_frame, text="Active Project:", bg=self.bg_card, fg=self.fg_muted, font=("Outfit", 9)).grid(row=0, column=0, sticky="w", padx=15, pady=(15, 5))
+        self.project_ent = tk.Entry(action_frame, bg=self.bg_dark, fg=self.fg_main, insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#222222", font=("Outfit", 10))
+        self.project_ent.grid(row=0, column=1, sticky="ew", padx=10, pady=(15, 5))
         self.project_ent.insert(0, self.config["activeProject"])
-        self.project_ent.grid(row=0, column=1, sticky="ew", padx=15, pady=(12, 4))
 
-        switch_btn = tk.Button(action_frame, text="Switch Project", command=self.switch_project, bg="#181818", fg=self.fg_main, font=("Outfit", 8, "bold"), bd=0, cursor="hand2")
-        switch_btn.grid(row=0, column=2, sticky="e", padx=15, pady=(12, 4))
+        switch_btn = tk.Button(action_frame, text="Switch", command=self.switch_project, bg="#1f2937", fg="white", font=("Outfit", 9, "bold"), bd=0, cursor="hand2", activebackground="#111827")
+        switch_btn.grid(row=0, column=2, sticky="ew", padx=15, pady=(15, 5))
 
-        # Tasks Count Section
-        tk.Label(action_frame, text="Tasks Completed Today:", font=("Outfit", 10, "bold"), fg=self.fg_muted, bg=self.bg_card).grid(row=1, column=0, sticky="w", padx=15, pady=(10, 15))
-        self.task_lbl = tk.Label(action_frame, text="0", font=("Outfit", 16, "bold"), fg="white", bg=self.bg_card)
-        self.task_lbl.grid(row=1, column=1, sticky="w", padx=15, pady=(10, 15))
+        # Task counter display
+        tk.Label(action_frame, text="Tasks Completed:", bg=self.bg_card, fg=self.fg_muted, font=("Outfit", 9)).grid(row=1, column=0, sticky="w", padx=15, pady=(5, 15))
+        self.task_lbl = tk.Label(action_frame, text="0", font=("Outfit", 16, "bold"), fg=self.color_accent, bg=self.bg_card)
+        self.task_lbl.grid(row=1, column=1, sticky="w", padx=10, pady=(5, 15))
 
         self.log_task_btn = tk.Button(action_frame, text="+1 Task", command=self.log_task, bg="#10b981", fg="white", font=("Outfit", 10, "bold"), bd=0, cursor="hand2", activebackground="#059669")
-        self.log_task_btn.grid(row=1, column=2, sticky="ew", padx=15, pady=(10, 15))
+        self.log_task_btn.grid(row=1, column=2, sticky="ew", padx=15, pady=(5, 15))
 
         action_frame.columnconfigure(1, weight=1)
 
@@ -206,13 +209,90 @@ class Ethara.aiTrackerApp:
         footer_lbl = tk.Label(self.root, text="System-wide tracking active • Targets: Work 6h, Login 8h", font=("Outfit", 9), fg=self.fg_muted, bg=self.bg_dark)
         footer_lbl.pack(side="bottom", pady=15)
 
-    def save_settings(self):
-        self.config["employeeName"] = self.name_ent.get().strip()
-        self.config["employeeId"] = self.id_ent.get().strip()
-        self.config["syncUrl"] = self.url_ent.get().strip()
+    def create_metric_card(self, parent, label, value, color, row, col):
+        card = tk.Frame(parent, bg=self.bg_card, bd=1, relief="solid", padx=15, pady=12)
+        card.grid(row=row, column=col, sticky="nsew", padx=5, pady=5)
         
-        self.save_config()
-        messagebox.showinfo("Settings Saved", "Employee profile settings have been updated and saved successfully!")
+        lbl = tk.Label(card, text=label, font=("Outfit", 8, "bold"), fg=self.fg_muted, bg=self.bg_card)
+        lbl.pack(anchor="w")
+        
+        val_lbl = tk.Label(card, text=value, font=("Plus Jakarta Sans", 15, "bold"), fg=color, bg=self.bg_card)
+        val_lbl.pack(anchor="w", pady=(4, 0))
+        
+        return val_lbl
+
+    def update_name_field(self, name):
+        self.name_ent.config(state="normal")
+        self.name_ent.delete(0, tk.END)
+        self.name_ent.insert(0, name)
+        self.name_ent.config(state="readonly")
+
+    def save_settings(self):
+        emp_id = self.id_ent.get().strip()
+        sync_url = self.url_ent.get().strip().rstrip("/")
+        
+        if not emp_id or not sync_url:
+            messagebox.showerror("Error", "Please fill in both Employee ID and Sync Server URL!")
+            return
+
+        # Verify Employee ID against the central registry database
+        try:
+            res = requests.get(f"{sync_url}/api/employees/verify?id={emp_id}", timeout=4)
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("exists"):
+                    emp_name = data.get("name", "Employee")
+                    self.update_name_field(emp_name)
+                    
+                    self.config["employeeName"] = emp_name
+                    self.config["employeeId"] = emp_id
+                    self.config["syncUrl"] = sync_url
+                    
+                    self.save_config()
+                    messagebox.showinfo("Verified & Saved", f"Profile verified successfully!\nEmployee Name: {emp_name}")
+                else:
+                    messagebox.showerror("Invalid ID", "Employee ID is not registered in the Admin Web registry database.")
+            else:
+                messagebox.showerror("Connection Error", "Server returned an invalid status code during verification.")
+        except Exception as e:
+            messagebox.showerror("Verification Failed", f"Could not connect to the verification server:\n{str(e)}")
+
+    def toggle_login(self):
+        if not self.config["employeeId"] or not self.config["syncUrl"]:
+            messagebox.showerror("Error", "Please verify and save your Employee ID settings first!")
+            return
+
+        if not self.is_logged_in:
+            # Handle Login
+            self.is_logged_in = True
+            self.is_on_break = False
+            self.login_btn.config(text="Logout", bg="#4b5563", activebackground="#374151")
+            self.break_btn.config(state="normal", text="Break", bg="#374151", activebackground="#4b5563")
+            messagebox.showinfo("Logged In", "Your shift tracking session has started!")
+        else:
+            # Handle Logout
+            self.is_logged_in = False
+            self.is_on_break = False
+            self.login_btn.config(text="Login", bg="#1d4ed8", activebackground="#1e40af")
+            self.break_btn.config(state="disabled", text="Break", bg="#374151")
+            messagebox.showinfo("Logged Out", "Your shift session has been ended.")
+            
+        self.sync_dashboard()
+
+    def toggle_break(self):
+        if not self.is_logged_in:
+            return
+
+        if not self.is_on_break:
+            # Enter break mode
+            self.is_on_break = True
+            self.break_btn.config(text="Resume", bg=self.color_accent, activebackground="#059669")
+        else:
+            # Exit break mode
+            self.is_on_break = False
+            self.break_btn.config(text="Break", bg="#374151", activebackground="#4b5563")
+            
+        self.sync_dashboard()
 
     def switch_project(self):
         new_project = self.project_ent.get().strip()
@@ -229,19 +309,18 @@ class Ethara.aiTrackerApp:
                 self.projects[new_project] = {
                     "workTime": 0.0,
                     "idleTime": 0.0,
+                    "breakTime": 0.0,
                     "taskCount": 0
                 }
             
-            # Inform user
             messagebox.showinfo("Project Switched", f"Active project changed from '{old_project}' to '{new_project}'.")
 
     def log_task(self):
         active_proj = self.config["activeProject"]
         if active_proj not in self.projects:
-            self.projects[active_proj] = {"workTime": 0.0, "idleTime": 0.0, "taskCount": 0}
+            self.projects[active_proj] = {"workTime": 0.0, "idleTime": 0.0, "breakTime": 0.0, "taskCount": 0}
         self.projects[active_proj]["taskCount"] += 1
         
-        # Update UI counter
         self.update_task_counter()
         
         # Trigger immediate sync
@@ -256,7 +335,6 @@ class Ethara.aiTrackerApp:
         def on_activity(*args, **kwargs):
             self.last_input_time = time.time()
 
-        # Start non-blocking mouse and keyboard listeners
         self.mouse_listener = mouse.Listener(on_move=on_activity, on_click=on_activity, on_scroll=on_activity)
         self.keyboard_listener = keyboard.Listener(on_press=on_activity)
         
@@ -275,10 +353,16 @@ class Ethara.aiTrackerApp:
         while self.is_running:
             time.sleep(1.0)
             
+            if not self.is_logged_in:
+                # Safe GUI updates from thread
+                self.root.after(0, self.update_gui_timers)
+                continue
+
+            # Increment session/login time
+            self.total_login_time += 1.0
+
             # Check active window
             title = get_active_window_title().lower()
-            
-            # Is user on Ethara.ai?
             self.is_tracking = "multimango" in title
             
             # Check user inactivity threshold
@@ -287,18 +371,27 @@ class Ethara.aiTrackerApp:
 
             active_proj = self.config["activeProject"]
             if active_proj not in self.projects:
-                self.projects[active_proj] = {"workTime": 0.0, "idleTime": 0.0, "taskCount": 0}
+                self.projects[active_proj] = {"workTime": 0.0, "idleTime": 0.0, "breakTime": 0.0, "taskCount": 0}
 
             proj = self.projects[active_proj]
+            if "breakTime" not in proj:
+                proj["breakTime"] = 0.0
 
             # Accumulate metrics
-            if self.is_tracking:
-                self.total_login_time += 1.0
-                
-                if self.is_user_active:
-                    self.total_active_time += 1.0
-                    proj["workTime"] += 1.0
+            if self.is_on_break:
+                # Accumulate Break Time
+                self.total_break_time += 1.0
+                proj["breakTime"] += 1.0
+            else:
+                if self.is_tracking:
+                    if self.is_user_active:
+                        self.total_active_time += 1.0
+                        proj["workTime"] += 1.0
+                    else:
+                        self.total_idle_time += 1.0
+                        proj["idleTime"] += 1.0
                 else:
+                    # Logged in but not on active window -> counts as idle
                     self.total_idle_time += 1.0
                     proj["idleTime"] += 1.0
 
@@ -310,15 +403,21 @@ class Ethara.aiTrackerApp:
         self.work_time_val.config(text=self.format_duration(self.total_active_time))
         self.login_time_val.config(text=self.format_duration(self.total_login_time))
         self.idle_time_val.config(text=self.format_duration(self.total_idle_time))
+        self.break_time_val.config(text=self.format_duration(self.total_break_time))
         
         # Update Status Badge
-        if self.is_tracking:
-            if self.is_user_active:
-                self.status_lbl.config(text="Working", fg=self.color_work)
+        if self.is_logged_in:
+            if self.is_on_break:
+                self.status_lbl.config(text="Break", fg=self.color_break)
+            elif self.is_tracking:
+                if self.is_user_active:
+                    self.status_lbl.config(text="Working", fg=self.color_work)
+                else:
+                    self.status_lbl.config(text="Idle", fg=self.color_idle)
             else:
                 self.status_lbl.config(text="Idle", fg=self.color_idle)
         else:
-            self.status_lbl.config(text="Inactive", fg=self.fg_muted)
+            self.status_lbl.config(text="Offline", fg=self.fg_muted)
 
     # Sync server sync loop (ticks once every 10 seconds)
     def sync_loop(self):
@@ -344,16 +443,19 @@ class Ethara.aiTrackerApp:
             projects_payload[name] = {
                 "workTime": int(data["workTime"] * 1000),
                 "idleTime": int(data["idleTime"] * 1000),
+                "breakTime": int(data.get("breakTime", 0.0) * 1000),
                 "taskCount": data["taskCount"]
             }
 
-        is_online = self.is_tracking and not force_offline
+        is_online = self.is_logged_in and not force_offline
         status = "Offline"
-        if not force_offline:
-            if self.is_tracking:
+        if not force_offline and self.is_logged_in:
+            if self.is_on_break:
+                status = "Break"
+            elif self.is_tracking:
                 status = "Working" if self.is_user_active else "Idle"
             else:
-                status = "Offline"
+                status = "Idle"
 
         payload = {
             "employeeId": emp_id,
@@ -363,6 +465,7 @@ class Ethara.aiTrackerApp:
             "loginTime": int(self.total_login_time * 1000),
             "activeTime": int(self.total_active_time * 1000),
             "idleTime": int(self.total_idle_time * 1000),
+            "breakTime": int(self.total_break_time * 1000),
             "projects": projects_payload,
             "isOnline": is_online,
             "status": status
@@ -395,5 +498,5 @@ class Ethara.aiTrackerApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = Ethara.aiTrackerApp(root)
+    app = EtharaTrackerApp(root)
     root.mainloop()
