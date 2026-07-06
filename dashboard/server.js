@@ -146,8 +146,9 @@ app.post('/api/sync', (req, res) => {
   saveDatabase();
 
   // Forward to Google Sheets if configured
-  if (database.googleSheetsWebhookUrl) {
-    forwardToGoogleSheets(database.googleSheetsWebhookUrl, syncDate, record);
+  const webhookUrl = process.env.GOOGLE_SHEETS_WEBHOOK_URL || database.googleSheetsWebhookUrl;
+  if (webhookUrl) {
+    forwardToGoogleSheets(webhookUrl, syncDate, record);
   }
 
   res.json({ success: true });
@@ -167,7 +168,7 @@ app.get('/api/history', (req, res) => {
 
 // API: Get and set dashboard settings
 app.get('/api/settings', (req, res) => {
-  res.json({ googleSheetsWebhookUrl: database.googleSheetsWebhookUrl || "" });
+  res.json({ googleSheetsWebhookUrl: process.env.GOOGLE_SHEETS_WEBHOOK_URL || database.googleSheetsWebhookUrl || "" });
 });
 
 app.post('/api/settings', (req, res) => {
