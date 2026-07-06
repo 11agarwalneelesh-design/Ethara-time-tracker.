@@ -67,6 +67,7 @@ const elements = {
   // Employee Registry elements
   regEmpId: document.getElementById('reg-emp-id'),
   regEmpName: document.getElementById('reg-emp-name'),
+  regEmpEmail: document.getElementById('reg-emp-email'),
   registerEmpBtn: document.getElementById('register-emp-btn'),
   registryTableBody: document.getElementById('registry-table-body')
 };
@@ -756,7 +757,7 @@ async function fetchEmployeeRegistry() {
     
     elements.registryTableBody.innerHTML = '';
     if (employees.length === 0) {
-      elements.registryTableBody.innerHTML = '<tr><td colspan="2" style="text-align: center; color: var(--text-dimmed);">No registered employees.</td></tr>';
+      elements.registryTableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-dimmed);">No registered employees.</td></tr>';
       return;
     }
 
@@ -765,6 +766,7 @@ async function fetchEmployeeRegistry() {
       tr.innerHTML = `
         <td><strong>${emp.id}</strong></td>
         <td>${emp.name}</td>
+        <td>${emp.email || 'N/A'}</td>
       `;
       elements.registryTableBody.appendChild(tr);
     });
@@ -777,6 +779,7 @@ async function fetchEmployeeRegistry() {
 async function registerEmployee() {
   const id = elements.regEmpId.value.trim();
   const name = elements.regEmpName.value.trim();
+  const email = elements.regEmpEmail.value.trim();
 
   if (!id || !name) {
     alert("Please enter both Employee ID and Name!");
@@ -787,12 +790,13 @@ async function registerEmployee() {
     const res = await fetch('/api/employees/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, name })
+      body: JSON.stringify({ id, name, email })
     });
     
     if (res.ok) {
       elements.regEmpId.value = '';
       elements.regEmpName.value = '';
+      elements.regEmpEmail.value = '';
       fetchEmployeeRegistry();
     } else {
       const data = await res.json();

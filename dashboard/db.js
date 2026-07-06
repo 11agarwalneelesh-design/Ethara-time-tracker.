@@ -39,9 +39,18 @@ async function init() {
   await run(`
     CREATE TABLE IF NOT EXISTS employees (
       id TEXT PRIMARY KEY,
-      name TEXT NOT NULL
+      name TEXT NOT NULL,
+      email TEXT
     )
   `);
+
+  // Migration: Add email column if table already existed without it
+  try {
+    await run(`ALTER TABLE employees ADD COLUMN email TEXT`);
+    console.log("Added email column to employees table.");
+  } catch (e) {
+    // Column already exists, ignore
+  }
 
   await run(`
     CREATE TABLE IF NOT EXISTS history (
@@ -72,35 +81,37 @@ async function init() {
   const countRow = await get(`SELECT COUNT(*) as count FROM employees`);
   if (countRow.count === 0) {
     db.serialize(() => {
-      const stmt = db.prepare(`INSERT OR IGNORE INTO employees (id, name) VALUES (?, ?)`);
+      const stmt = db.prepare(`INSERT OR IGNORE INTO employees (id, name, email) VALUES (?, ?, ?)`);
       for (let i = 1; i <= 100; i++) {
         const id = `EMP${String(i).padStart(3, '0')}`;
-        stmt.run(id, `Employee ${i}`);
+        stmt.run(id, `Employee ${i}`, `employee${i}@ethara.ai`);
       }
       stmt.finalize();
     });
-    console.log('SQL Database pre-populated with 100 sample employees.');
+    console.log('SQL Database pre-populated with 100 sample employees (including email).');
   }
 }
 
 // Verify employee ID
 async function verifyEmployee(id) {
-  const row = await get(`SELECT name FROM employees WHERE LOWER(id) = LOWER(?)`, [id.trim()]);
-  return row ? { exists: true, name: row.name } : { exists: false };
+  const row = await get(`SELECT name, email FROM employees WHERE LOWER(id) = LOWER(?)`, [id.trim()]);
+  return row ? { exists: true, name: row.name, email: row.email } : { exists: false };
 }
 
 // Get full employee registry
 async function getRegistry() {
-  return await all(`SELECT id, name FROM employees ORDER BY id ASC`);
+  return await all(`SELECT id, name, email FROM employees ORDER BY id ASC`);
 }
 
 // Register or update an employee record
-async function registerEmployee(id, name) {
+async function registerEmployee(id, name, email) {
   await run(`
-    INSERT INTO employees (id, name) 
-    VALUES (?, ?)
-    ON CONFLICT(id) DO UPDATE SET name = excluded.name
-  `, [id.trim(), name.trim()]);
+    INSERT INTO employees (id, name, email) 
+    VALUES (?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET 
+      name = excluded.name,
+      email = excluded.email
+  `, [id.trim(), name.trim(), (email || '').trim()]);
   return true;
 }
 

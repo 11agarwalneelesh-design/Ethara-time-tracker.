@@ -83,11 +83,11 @@ app.get('/api/employees/registry', async (req, res) => {
 // API: Register a new employee
 app.post('/api/employees/register', async (req, res) => {
   try {
-    const { id, name } = req.body;
+    const { id, name, email } = req.body;
     if (!id || !name) {
       return res.status(400).json({ error: 'Missing id or name' });
     }
-    await db.registerEmployee(id, name);
+    await db.registerEmployee(id, name, email);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
