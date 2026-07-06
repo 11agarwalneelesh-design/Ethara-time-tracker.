@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Ethara.ai Time Tracker",
+  "version": "1.0.0",
+  "description": "Real-time time and task tracker for the Ethara.ai tasking platform. Tracks login time, active work time, idle time, and task completions.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*.multimango.com/*",
+    "http://localhost/*",
+    "https://*/*",
+    "*://docs.google.com/forms/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.multimango.com/*",
+        "https://docs.google.com/forms/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}

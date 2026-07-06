@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ethara.ai Admin Dashboard</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        
+        <div class="brand-text">
+          <h2>Ethara.ai</h2>
+          <span>Admin Portal</span>
+        </div>
+      </div>
+      <nav class="sidebar-menu">
+        <button class="menu-item active" data-view="live-view">Dashboard</button>
+        <button class="menu-item" data-view="reports-view">Reports & Export</button>
+        <button class="menu-item" data-view="sap-view">SAP Import</button>
+      </nav>
+      <div class="sidebar-footer">
+        <span>Version 1.0.0</span>
+      </div>
+    </aside>
+
+    <!-- Main Container -->
+    <main class="main-content">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="page-title">
+          <h1>Team Overview</h1>
+          <p id="current-date-lbl">Live Monitoring</p>
+        </div>
+        <div class="topbar-actions">
+          <div class="date-selector-group">
+            <label for="dashboard-date-picker">Inspect Date:</label>
+            <input type="date" id="dashboard-date-picker" class="date-field">
+          </div>
+          <button id="refresh-btn" class="btn btn-secondary">🔄 Refresh</button>
+        </div>
+      </header>
+
+      <!-- View 1: Live Monitoring Dashboard -->
+      <section id="live-view" class="view-content active">
+        <!-- Metric Cards -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-icon online-icon">👥</div>
+            <div class="metric-data">
+              <span class="metric-title">Active Now</span>
+              <span id="active-count-val" class="metric-value">0</span>
+            </div>
+            <div class="metric-badge">Live status</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-icon work-icon">⏱️</div>
+            <div class="metric-data">
+              <span class="metric-title">Team Work Time</span>
+              <span id="total-work-val" class="metric-value">00:00:00</span>
+            </div>
+            <div class="metric-badge" style="background: rgba(0, 242, 254, 0.1); color: #00f2fe;">Work accumulated</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-icon task-icon">✅</div>
+            <div class="metric-data">
+              <span class="metric-title">Tasks Completed</span>
+              <span id="total-tasks-val" class="metric-value">0</span>
+            </div>
+            <div class="metric-badge" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">Total submissions</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-icon idle-icon">⏳</div>
+            <div class="metric-data">
+              <span class="metric-title">Team Avg Idle</span>
+              <span id="avg-idle-val" class="metric-value">0%</span>
+            </div>
+            <div class="metric-badge" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">Idle vs Login ratio</div>
+          </div>
+        </div>
+
+        <!-- Live Employee Cards -->
+        <div class="dashboard-section-header">
+          <h2>Employee Compliance Board</h2>
+        </div>
+        <div id="employees-grid" class="employees-grid">
+          <!-- Rendered dynamically -->
+          <div class="grid-placeholder">No employees synced today yet.</div>
+        </div>
+
+        <!-- Detailed List Table -->
+        <div class="dashboard-section-header">
+          <h2>Detailed Activity Table</h2>
+        </div>
+        <div class="table-card">
+          <div class="table-wrapper">
+            <table class="employees-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Status</th>
+                  <th>Current Project</th>
+                  <th>Login (Target 8h)</th>
+                  <th>Work (Target 6h)</th>
+                  <th>Idle Time</th>
+                  <th>Tasks</th>
+                  <th>Compliance</th>
+                </tr>
+              </thead>
+              <tbody id="employees-table-body">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- View 2: Reports & Export View -->
+      <section id="reports-view" class="view-content">
+        <div class="reports-container">
+          <div class="card export-card">
+            <h2>Export Team Sheets</h2>
+            <p>Generate and download CSV report logs for payroll and workflow verification. Select between exporting today's metrics or the complete 30-day history of all employees.</p>
+            <div class="flex-row" style="margin-top: 20px;">
+              <button id="export-today-btn" class="btn btn-primary">Export Today's Sheet</button>
+              <button id="export-history-btn" class="btn btn-secondary">Export Full History (CSV)</button>
+            </div>
+          </div>
+
+          <div class="card export-card">
+            <h2>Google Sheets Live Integration</h2>
+            <p>Link your dashboard to a Google Sheet. Every time an employee syncs their metrics, they will be forwarded in real-time to your custom Google Sheets Apps Script URL.</p>
+            <div class="flex-row" style="margin-top: 15px; align-items: flex-end;">
+              <div class="form-group flex-fill">
+                <label for="google-sheet-webhook-input">Google Apps Script Webhook URL</label>
+                <input type="url" id="google-sheet-webhook-input" class="input-field" placeholder="https://script.google.com/macros/s/.../exec" style="margin-top: 6px;">
+              </div>
+              <button id="save-sheet-webhook-btn" class="btn btn-accent" style="height: 38px;">Save Link</button>
+            </div>
+            <div id="webhook-toast" style="color: var(--color-success); font-size: 11px; margin-top: 8px; font-weight: 600; display: none;">Google Sheets connection linked successfully!</div>
+          </div>
+
+          <div class="card history-card">
+            <h2>Historical Records</h2>
+            <div class="table-wrapper" style="margin-top: 16px;">
+              <table class="history-report-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Employees Logged</th>
+                    <th>Total Work Hours</th>
+                    <th>Total Tasks</th>
+                    <th>Avg Idle Time %</th>
+                  </tr>
+                </thead>
+                <tbody id="history-table-body">
+                  <!-- Rendered dynamically -->
+                  <tr><td colspan="5" style="text-align: center; color: var(--text-dimmed);">No history cached yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- View 3: SAP Import View -->
+      <section id="sap-view" class="view-content">
+        <div class="reports-container">
+          <div class="card export-card">
+            <h2>Upload SAP Time Logs</h2>
+            <p>Upload a CSV file containing employee punch card records exported from SAP to analyze and compare their actual tracking metrics.</p>
+            
+            <div class="upload-zone" id="upload-zone">
+              <span class="upload-icon">📂</span>
+              <p>Drag and drop your SAP CSV file here, or click to browse</p>
+              <input type="file" id="sap-file-input" accept=".csv" style="display: none;">
+            </div>
+
+            <!-- Column Mapping Panel (Shows after file upload) -->
+            <div class="sap-mapping-panel" id="sap-mapping-panel" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-glass);">
+              <h3 style="margin-bottom: 12px; color: var(--color-work);">Map SAP CSV Columns</h3>
+              <div class="flex-row" style="flex-wrap: wrap; gap: 16px;">
+                <div class="form-group flex-fill" style="min-width: 120px;">
+                  <label for="sap-col-empid" style="font-size: 11px; text-transform: uppercase; color: var(--text-muted);">Employee ID</label>
+                  <select id="sap-col-empid" class="select-field" style="width: 100%; margin-top: 6px;"></select>
+                </div>
+                <div class="form-group flex-fill" style="min-width: 120px;">
+                  <label for="sap-col-date" style="font-size: 11px; text-transform: uppercase; color: var(--text-muted);">Date</label>
+                  <select id="sap-col-date" class="select-field" style="width: 100%; margin-top: 6px;"></select>
+                </div>
+                <div class="form-group flex-fill" style="min-width: 120px;">
+                  <label for="sap-col-hours" style="font-size: 11px; text-transform: uppercase; color: var(--text-muted);">Logged Hours</label>
+                  <select id="sap-col-hours" class="select-field" style="width: 100%; margin-top: 6px;"></select>
+                </div>
+              </div>
+              <button id="process-sap-btn" class="btn btn-primary" style="margin-top: 16px;">Compare Attendance</button>
+            </div>
+          </div>
+
+          <!-- Comparison Output Card -->
+          <div class="card history-card" id="sap-results-card" style="display: none;">
+            <h2>SAP Attendance Comparison Report</h2>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Compares system-tracked work time against clock times logged in SAP.</p>
+            <div class="table-wrapper">
+              <table class="history-report-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Employee ID</th>
+                    <th>Employee Name</th>
+                    <th>Tracked Login (h)</th>
+                    <th>SAP Logged (h)</th>
+                    <th>Variance (h)</th>
+                    <th>Discrepancy Status</th>
+                  </tr>
+                </thead>
+                <tbody id="sap-comparison-table-body">
+                  <!-- Generated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Admin Script -->
+  <script src="app.js"></script>
+</body>
+</html>

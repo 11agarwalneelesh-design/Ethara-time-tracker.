@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ethara.ai Tracker</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        
+        <div class="logo-text">
+          <h1>Ethara.ai</h1>
+          <span>Live Tracker</span>
+        </div>
+      </div>
+      <div class="status-indicator-container">
+        <span id="status-pulse" class="status-pulse offline"></span>
+        <span id="status-text" class="status-label">Inactive</span>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="app-nav">
+      <button class="nav-btn active" data-tab="dashboard-tab">Dashboard</button>
+      <button class="nav-btn" data-tab="projects-tab">Projects</button>
+      <button class="nav-btn" data-tab="reports-tab">Reports</button>
+      <button class="nav-btn" data-tab="settings-tab">Settings</button>
+    </nav>
+
+    <!-- Content Sections -->
+    <main class="app-main">
+      <!-- 1. DASHBOARD TAB -->
+      <section id="dashboard-tab" class="tab-content active">
+        <!-- Progress Rings Section -->
+        <div class="progress-section">
+          <!-- Work Time Ring -->
+          <div class="ring-card">
+            <div class="ring-wrapper">
+              <svg class="progress-ring" width="100" height="100">
+                <circle class="progress-ring-bg" stroke="rgba(255,255,255,0.05)" stroke-width="8" fill="transparent" r="42" cx="50" cy="50"/>
+                <circle id="work-ring" class="progress-ring-fg work-fg" stroke="url(#work-gradient)" stroke-width="8" stroke-dasharray="263.89" stroke-dashoffset="263.89" stroke-linecap="round" fill="transparent" r="42" cx="50" cy="50"/>
+                <defs>
+                  <linearGradient id="work-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#00f2fe" />
+                    <stop offset="100%" stop-color="#4facfe" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="ring-label-container">
+                <span id="work-percentage" class="percentage-val">0%</span>
+              </div>
+            </div>
+            <div class="card-details">
+              <h3>Active Work</h3>
+              <div id="work-timer" class="timer-display">00:00:00</div>
+              <div class="target-subtext">Target: <span id="target-work-val">6h</span></div>
+            </div>
+          </div>
+
+          <!-- Login Time Ring -->
+          <div class="ring-card">
+            <div class="ring-wrapper">
+              <svg class="progress-ring" width="100" height="100">
+                <circle class="progress-ring-bg" stroke="rgba(255,255,255,0.05)" stroke-width="8" fill="transparent" r="42" cx="50" cy="50"/>
+                <circle id="login-ring" class="progress-ring-fg login-fg" stroke="url(#login-gradient)" stroke-width="8" stroke-dasharray="263.89" stroke-dashoffset="263.89" stroke-linecap="round" fill="transparent" r="42" cx="50" cy="50"/>
+                <defs>
+                  <linearGradient id="login-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#ff0844" />
+                    <stop offset="100%" stop-color="#ffb199" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="ring-label-container">
+                <span id="login-percentage" class="percentage-val">0%</span>
+              </div>
+            </div>
+            <div class="card-details">
+              <h3>Login/Session</h3>
+              <div id="login-timer" class="timer-display">00:00:00</div>
+              <div class="target-subtext">Target: <span id="target-login-val">8h</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inactivity / Idle Counter -->
+        <div class="stats-bar-grid">
+          <div class="stat-bar-card idle-card">
+            <div class="bar-header">
+              <span>Total Idle Time</span>
+              <span id="idle-timer" class="small-timer">00:00:00</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div id="idle-bar-fill" class="progress-bar-fill idle-fg" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Task & Project Action Panel -->
+        <div class="action-panel">
+          <div class="active-project-tag">
+            <span class="lbl">Active Project:</span>
+            <span id="current-project-display" class="val">General</span>
+          </div>
+
+          <div class="task-counter-container">
+            <div class="task-label-group">
+              <span class="count-title">Tasks Completed</span>
+              <span id="task-counter" class="count-number">0</span>
+            </div>
+            
+            <button id="add-task-btn" class="btn btn-primary task-btn">
+              <span class="btn-icon">+</span>
+              <span class="btn-lbl">Log Completed Task</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. PROJECTS TAB -->
+      <section id="projects-tab" class="tab-content">
+        <div class="project-selector-group">
+          <h3>Change Active Project</h3>
+          <div class="flex-row">
+            <select id="project-dropdown" class="select-field">
+              <option value="General">General</option>
+            </select>
+            <button id="set-active-project-btn" class="btn btn-secondary select-apply-btn">Switch</button>
+          </div>
+        </div>
+
+        <div class="project-creator-group">
+          <h3>Create New Project</h3>
+          <div class="flex-row">
+            <input type="text" id="new-project-input" class="input-field" placeholder="Project name (e.g. Sonic)..." max="25">
+            <button id="create-project-btn" class="btn btn-accent">Add</button>
+          </div>
+        </div>
+
+        <div class="projects-list-section">
+          <h3>Project Summary (Today)</h3>
+          <div class="table-wrapper">
+            <table class="projects-table">
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>Work Time</th>
+                  <th>Idle Time</th>
+                  <th>Tasks</th>
+                </tr>
+              </thead>
+              <tbody id="projects-table-body">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. REPORTS TAB -->
+      <section id="reports-tab" class="tab-content">
+        <div class="reporting-options">
+          <div class="report-box">
+            <h3>Download CSV Report</h3>
+            <p>Download daily and weekly activities details in structured spreadsheet format.</p>
+            <div class="report-actions flex-row">
+              <button id="export-today-btn" class="btn btn-primary flex-fill">Export Today</button>
+              <button id="export-all-btn" class="btn btn-secondary flex-fill">Export Last 30 Days</button>
+            </div>
+          </div>
+
+          <div class="history-section">
+            <h3>Recent Log History</h3>
+            <div id="history-list" class="history-list">
+              <!-- Rendered dynamically -->
+              <div class="history-placeholder">No history logged yet.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. SETTINGS TAB -->
+      <section id="settings-tab" class="tab-content">
+        <form id="settings-form" class="settings-form">
+          <div class="form-group">
+            <label for="employee-name-input">Employee Name</label>
+            <input type="text" id="employee-name-input" class="input-field" placeholder="Enter name...">
+          </div>
+
+          <div class="form-group">
+            <label for="employee-id-input">Employee ID</label>
+            <input type="text" id="employee-id-input" class="input-field" placeholder="Enter employee ID...">
+          </div>
+
+          <div class="form-group">
+            <label for="sync-url-input">Dashboard Sync URL</label>
+            <input type="url" id="sync-url-input" class="input-field" placeholder="e.g. http://localhost:3000...">
+            <span class="form-help">Syncs your tracked activity to the central team dashboard in real-time.</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-fill">
+              <label for="work-target-input">Work Target (hrs)</label>
+              <input type="number" id="work-target-input" class="input-field" min="1" max="24" value="6">
+            </div>
+            <div class="form-group flex-fill">
+              <label for="login-target-input">Login Target (hrs)</label>
+              <input type="number" id="login-target-input" class="input-field" min="1" max="24" value="8">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="idle-threshold-input">Idle Detection Threshold (seconds)</label>
+            <input type="number" id="idle-threshold-input" class="input-field" min="10" max="600" value="60">
+            <span class="form-help">Automatically marks you idle after this duration of inactivity.</span>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary full-width">Save Settings</button>
+          </div>
+          <div id="settings-save-success" class="settings-toast">Settings saved successfully!</div>
+        </form>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <span class="footer-lbl">Target: Work 6h (Min) • Login 8h (Required)</span>
+    </footer>
+  </div>
+
+  <!-- Popup Logic -->
+  <script src="popup.js"></script>
+</body>
+</html>

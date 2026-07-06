@@ -1,0 +1,7 @@
+node_modules/
+database.json
+config.json
+*.log
+.system_generated/
+scratch/
+.git/
